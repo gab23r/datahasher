@@ -32,7 +32,6 @@ def read_descriptors(path: Path) -> pl.DataFrame:
         "DATA_TYPE": pl.String,
         "TYPE": pl.String,
         "FK": pl.String,
-        "IS_PARTITION_KEY": pl.Boolean,
     }
     if path.exists():
         concepts_desc = pl.read_csv(path, schema=schema)

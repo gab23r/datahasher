@@ -1,5 +1,4 @@
 import os
-from multiprocessing.pool import ThreadPool
 from pathlib import Path
 from typing import Any
 
@@ -113,77 +112,36 @@ class Engine:
         return df
 
     def to_concept(
-        self,
-        df: pl.LazyFrame | pl.DataFrame,
-        concept: str,
+        self, df: pl.LazyFrame | pl.DataFrame, concept: str, concept_id: int | None
     ) -> None:
         """Save a concept in parquet if it complies with descriptor rules."""
 
         concept_desc = self.get_concept_desc(concept)
-        partition_column: str | None = next(
-            iter(concept_desc.filter(c.IS_PARTITION_KEY)["COLUMN"]), None
-        )
 
         # make sure schema is correct
         schema = utils_io.get_polars_schema(concept_desc)
-        df = df.lazy().cast(schema).select(schema.keys()).collect()  # type: ignore
+        df = df.lazy().select(schema.keys()).cast(schema).collect()  # type: ignore
 
         # check pk validity
         if pk := utils_io.get_pk(concept_desc):
             assert_msg = f"Primary keys ({pk}) are not unique for {concept}"
-            if partition_column:
-                pk.append(partition_column)
             assert df.select(pk).is_unique().all(), assert_msg
 
-        logical_data_hashes, dfs = self.get_logical_data_hashes(
-            df,
-            concept,
-            partition_column,
+        hash_ = utils_io.hash_dataframe(df)
+
+        # save to parquet
+        utils_io.write_hash(self.physical_data_path, df, hash_)
+
+        # add line to logical_data_hash
+        self.append_to_logical_data_hash(
+            pl.DataFrame(
+                {
+                    "CONCEPT": concept,
+                    "CONCEPT_ID": concept_id,
+                    "HASH": hash_,
+                }
+            )
         )
-
-        if logical_data_hashes:
-            # save to parquet
-            with ThreadPool() as pool:
-                pool.starmap(
-                    utils_io.write_hash,
-                    [
-                        (self.physical_data_path, df, data_hash["HASH"])
-                        for df, data_hash in zip(dfs, logical_data_hashes)
-                    ],
-                )
-
-            # add line to logical_data_hash
-            self.append_to_logical_data_hash(pl.DataFrame(logical_data_hashes))
-
-    def get_logical_data_hashes(
-        self,
-        df: pl.DataFrame,
-        concept: str,
-        partition_column: str | None,
-    ) -> tuple[list[dict[str, Any]], list[pl.DataFrame]]:
-        """Return rows to be added to logical_data_hash and a list dataframes (one by partition)."""
-
-        df_by_partition: dict[int, pl.DataFrame] | dict[None, pl.DataFrame]
-
-        if partition_column:
-            df_by_partition = df.partition_by(partition_column, as_dict=True)
-        else:
-            df_by_partition = {None: df}
-
-        df_sorted_l: list[pl.DataFrame] = []
-        logical_data_hashes_l = []
-        for concept_id, df_partition in df_by_partition.items():
-            hash_ = utils_io.hash_dataframe(df_partition)
-
-            data_hash_d: dict[str, str | int | None] = {
-                "CONCEPT": concept,
-                "CONCEPT_ID": concept_id,
-                "HASH": hash_,
-            }
-            df_sorted_l.append(df_partition)
-            logical_data_hashes_l.append(data_hash_d)
-
-        return logical_data_hashes_l, df_sorted_l
 
     def delete_concept(
         self,
