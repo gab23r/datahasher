@@ -1,5 +1,5 @@
-from datetime import datetime
 import time
+from datetime import datetime
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlmodel import Field, SQLModel
@@ -13,7 +13,7 @@ class LogicalDataHash(SQLModel, table=True):
 
     ID: int | None = Field(primary_key=True, default=None)
     CONCEPT: str = Field(index=True)
-    PARTITION_KEY: int | None = Field(index=True, default=None, nullable=True)
+    CONCEPT_ID: int | None = Field(index=True, default=None, nullable=True)
     TIMESTAMP_NS: datetime = Field(default_factory=time.time_ns)
     HASH: str | None
 

@@ -47,12 +47,12 @@ class Engine:
     def read_concept(
         self,
         concept: str,
-        partition_keys: list[int] | None = None,
+        concept_ids: list[int] | None = None,
         version: int | None = 0,
     ) -> pl.LazyFrame:
         """Return a LazyFrame of the concept."""
         if version == 0:  # then we can use symlink
-            paths = self.get_physical_paths(concept, partition_keys)
+            paths = self.get_physical_paths(concept, concept_ids)
         else:
             paths = [
                 self.physical_data_path / f"{h}.parquet"
@@ -60,7 +60,7 @@ class Engine:
                     columns=["HASH"],
                     version=version,
                     concept=concept,
-                    partition_key=partition_keys,
+                    concept_id=concept_ids,
                 )
                 .to_series()
                 .to_list()
@@ -79,15 +79,15 @@ class Engine:
     def query_logical_data_hash(
         self,
         concept: list[str] | str | None = None,
-        partition_key: list[int] | int | None = None,
+        concept_id: list[int] | int | None = None,
         columns: list[str] | None = None,
         version: int | None = 0,
     ) -> pl.DataFrame:
-        """Return the rows of LogicalDataHash for this concept, partition_key, version"""
+        """Return the rows of LogicalDataHash for this concept, concept_id, version"""
         where = dict_to_sql_where_statement(
             {
                 "CONCEPT": concept,
-                "PARTITION_KEY": partition_key,
+                "CONCEPT_ID": concept_id,
             }
         )
 
@@ -96,7 +96,7 @@ class Engine:
                 f"select {', '.join(columns) if columns else '*'} from (",
                 "    select *,",
                 "    -RANK() OVER ("
-                "        PARTITION BY CONCEPT, PARTITION_KEY ORDER BY TIMESTAMP_NS desc"
+                "        PARTITION BY CONCEPT, CONCEPT_ID ORDER BY TIMESTAMP_NS desc"
                 "    ) + 1 AS VERSION",
                 "    FROM logical_data_hash",
                 f"    {where}",
@@ -172,12 +172,12 @@ class Engine:
 
         df_sorted_l: list[pl.DataFrame] = []
         logical_data_hashes_l = []
-        for partition_key, df_partition in df_by_partition.items():
+        for concept_id, df_partition in df_by_partition.items():
             hash_ = utils_io.hash_dataframe(df_partition)
 
             data_hash_d: dict[str, str | int | None] = {
                 "CONCEPT": concept,
-                "PARTITION_KEY": partition_key,
+                "CONCEPT_ID": concept_id,
                 "HASH": hash_,
             }
             df_sorted_l.append(df_partition)
@@ -188,10 +188,10 @@ class Engine:
     def delete_concept(
         self,
         concept: list[str] | str | None = None,
-        partition_keys: list[int] | None = None,
+        concept_ids: list[int] | None = None,
     ) -> None:
         """Logical deletion of this concept."""
-        data_hash = self.query_logical_data_hash(concept, partition_keys)
+        data_hash = self.query_logical_data_hash(concept, concept_ids)
 
         self.append_to_logical_data_hash(
             data_hash.with_columns(pl.lit(None, dtype=pl.Utf8).alias("HASH")),
@@ -230,7 +230,7 @@ class Engine:
     def get_physical_paths(
         self,
         concept: str,
-        partition_keys: list[int] | None = None,
+        concept_ids: list[int] | None = None,
     ) -> list[Path]:
         """
         Return list a path for the given concept
@@ -242,7 +242,7 @@ class Engine:
             for p in pl.DataFrame(
                 {
                     "CONCEPT": concept,
-                    "PARTITION_KEY": "*" if partition_keys is None else partition_keys,
+                    "CONCEPT_ID": "*" if concept_ids is None else concept_ids,
                 }
             )
             .select(data_hash_to_logical_path)
@@ -258,7 +258,7 @@ class Engine:
         return pl.concat_str(
             pl.lit(str(self.logical_data_path)) + "/",
             c.CONCEPT + "/",
-            c.PARTITION_KEY.fill_null("*"),
+            c.CONCEPT_ID.fill_null("*"),
             pl.lit(".parquet"),
         ).alias("LOGICAL_PATH")
 
