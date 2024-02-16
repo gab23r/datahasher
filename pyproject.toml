@@ -1,0 +1,48 @@
+[tool.lint.ruff]
+target-version = "py311"
+line-length = 110
+fix = true
+
+
+select = [
+  "ANN", # flake8-annotations
+  "B", # flake8-bugbear
+  "C4", # flake8-comprehensions
+  "E", # pycodestyle
+  "F", # Pyflakes
+  "FA", # flake8-future-annotations
+  "FBT001", # flake8-boolean-trap
+  "I", # isort
+  "PIE", # flake8-pie
+  "PT", # flake8-pytest-style
+  "PTH", # flake8-use-pathlib
+  "Q", # flake8-quotes
+  "RUF", # Ruff-specific rules
+  "SIM", # flake8-simplify
+  "TCH", # flake8-type-checking
+  "TID", # flake8-tidy-imports
+  "UP", # pyupgrade
+  "W", # pycodestyle
+]
+
+ignore = [
+  "ANN002", # Missing type annotation for `*args`Ruff
+  "ANN003", # Missing type annotation for `**kwargs`Ruff
+  "ANN101", # Missing type annotation for `self` in method
+  "ANN204", # Missing return type annotation for special method `__init__`
+  "ANN401", # Dynamically typed expressions (typing.Any) are disallowed in `*args`
+  "B905", # `zip()` without an explicit `strict=` parameter
+]
+exclude = [
+  "datahasher/tests",
+]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 180
+
+[tool.mypy]
+python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = "ipyvuetify.*"
+ignore_missing_imports = true
