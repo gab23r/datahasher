@@ -1,47 +1,22 @@
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 import ipyvuetify as v
 import traitlets as t
 
 import datahasher
-from datahasher import config
+from datahasher.engine import Engine
 from datahasher.front.logger import Logger, OutputWidgetHandler
 from datahasher.utils.utils_misc import import_class
 
 
-def get_app_jupyter(app: v.App, *, v_model: bool = True) -> v.Dialog:
-    # wrap the App instance inside a Dialog in fullscreen to be used inside jupyter
-    dialog = v.Dialog(
-        v_model=v_model,
-        fullscreen=True,
-        persistent=True,
-        no_click_animation=True,
-        retain_focus=False,
-        v_slots=[
-            {
-                "name": "activator",
-                "variable": "x",
-                "children": v.Btn(v_on="x.on", children=["Open App"]),
-            }
-        ],
-        children=[v.Card(children=[app])],
-    )
-
-    def toggleLoading(*args) -> None:
-        dialog.v_model = not dialog.v_model
-
-    dialog.on_event("keydown.esc", toggleLoading)
-
-    return dialog
-
-
 class App(v.App, Logger):
-    def __init__(self, *, app: bool | None = True):
+    def __init__(self, *, engine: Engine, app: bool | None = True):
         self.app = app
-        self.app_bar = AppBar(app=app)
-        self.tree_view = TreeView()
+        self.app_bar = AppBar(engine=engine, app=app)
+        self.tree_view = TreeView(engine.treeview_path)
         self.navigation_drawer = v.NavigationDrawer(
             app=app, v_model=True, clipped=True, children=[self.tree_view]
         )
@@ -113,9 +88,34 @@ class App(v.App, Logger):
     def on_change_text_area(self, change: dict) -> None:
         self.app_bar.logger_icon.disabled = not bool(change.get("new"))
 
+    def display_in_dialog(self, *, v_model: bool = True):
+        # wrap the App instance inside a Dialog in fullscreen to be used inside jupyter
+        dialog = v.Dialog(
+            v_model=v_model,
+            fullscreen=True,
+            persistent=True,
+            no_click_animation=True,
+            retain_focus=False,
+            v_slots=[
+                {
+                    "name": "activator",
+                    "variable": "x",
+                    "children": v.Btn(v_on="x.on", children=["Open App"]),
+                }
+            ],
+            children=[v.Card(children=[self])],
+        )
+
+        def toggleLoading(*args) -> None:
+            dialog.v_model = not dialog.v_model
+
+        dialog.on_event("keydown.esc", toggleLoading)
+
+        return dialog
+
 
 class AppBar(v.AppBar, Logger):
-    def __init__(self, *, app: bool | None = False):
+    def __init__(self, *, engine: Engine, app: bool | None = False):
         self.nav_icon = v.AppBarNavIcon()
         self.logger_icon = v.Icon(children=["mdi-book-open-outline"])
         self.logger_badge = v.Badge(
@@ -134,7 +134,7 @@ class AppBar(v.AppBar, Logger):
         self.search = v.Combobox(
             v_model=None,
             item_value="class",
-            label=f"Explore {config.APP_NAME} ...",
+            label=f"Explore {engine.app_name} ...",
             rounded=True,
             clearable=True,
             single_line=True,
@@ -156,7 +156,7 @@ class AppBar(v.AppBar, Logger):
         version_chip = v.Chip(
             children=[f"v.{datahasher.__version__}"], outlined=True, class_="ml-2"
         )
-        env_chip = v.Chip(children=[f"{config.ENV}"], outlined=True, class_="ml-2")
+        env_chip = v.Chip(children=["dev"], outlined=True, class_="ml-2")
 
         super().__init__(
             app=app,
@@ -166,7 +166,7 @@ class AppBar(v.AppBar, Logger):
             color="primary",
             children=[
                 self.nav_icon,
-                v.ToolbarTitle(children=[config.APP_NAME]),
+                v.ToolbarTitle(children=[engine.app_name]),
                 v.Spacer(),
                 self.search,
                 v.Col(
@@ -187,9 +187,9 @@ class AppBar(v.AppBar, Logger):
 class TreeView(v.Treeview, Logger):
     last_open = t.Dict({}, allow_none=True).tag(sync=True)
 
-    def __init__(self):
-        if config.TREEVIEW_PATH.exists():
-            items = json.loads(config.TREEVIEW_PATH.read_text())
+    def __init__(self, treeview_path: Path | None):
+        if treeview_path and treeview_path.exists():
+            items = json.loads(treeview_path.read_text())
         else:
             items = []
 

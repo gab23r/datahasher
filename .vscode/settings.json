@@ -1,4 +1,13 @@
 {
+    "[python]": {
+        // # https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll": "always",
+          "source.organizeImports":"always"
+        },
+        "editor.defaultFormatter": "charliermarsh.ruff"
+      },
     "python.analysis.typeCheckingMode": "basic",
     "python.analysis.autoImportCompletions": true
 }
