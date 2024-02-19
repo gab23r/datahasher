@@ -4,13 +4,13 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="datahasher",
+    name="dema",
     version="0.1.0",
     author="Gabriel Robin",
-    description="Toolkit to develop data pipelines in python",
+    description="Data Engine MAnagment tool for python",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/gab23r/datahasher",
+    url="https://github.com/gab23r/dema",
     packages=setuptools.find_packages(),
     install_requires=["sqlmodel", "polars"],
     extras_require={

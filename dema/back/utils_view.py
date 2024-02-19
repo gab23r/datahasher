@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+import dema
 import polars as pl
+from dema.back import utils_io
 from polars import col as c
-
-from datahasher.back import utils_io
-import datahasher
 
 
 def get_concept_columns_repr(
@@ -19,7 +18,7 @@ def get_concept_columns_repr(
     ).iter_rows():
         fk_concept, key = fk.split(".")
         prefix = col[: len(col) - len(key)]
-        cols_to_display = datahasher.concepts_desc.filter(
+        cols_to_display = dema.concepts_desc.filter(
             pl.col("CONCEPT").eq(fk_concept)
             & pl.col("TYPE").is_in(["primary", "code", "textual"])
         )["COLUMN"].to_list()
@@ -35,12 +34,12 @@ def get_concept_columns_repr(
 
 
 def get_columns_repr(columns: list[str]) -> dict[str, pl.LazyFrame]:
-    decoding_concepts_desc = datahasher.concepts_desc.filter(
+    decoding_concepts_desc = dema.concepts_desc.filter(
         c.COLUMN.is_in(columns), c.TYPE == "primary"
     )
     columns_repr = {}
     for col, concept in decoding_concepts_desc.select("COLUMN", "CONCEPT").rows():
-        cols_to_display = datahasher.concepts_desc.filter(
+        cols_to_display = dema.concepts_desc.filter(
             concept == c.CONCEPT, c.TYPE.is_in(["primary", "code", "textual"])
         )["COLUMN"].to_list()
 

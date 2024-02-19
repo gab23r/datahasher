@@ -4,9 +4,8 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar
 
+import dema
 import ipyvuetify as v
-
-import datahasher
 
 T = TypeVar("T")
 
@@ -18,13 +17,11 @@ def log_error(func: Callable) -> Callable:
             return func(*args, **kwargs)
         except Exception as e:
             func_name = getattr(func, "__name__", "func")
-            datahasher.logger.warning(
+            dema.logger.warning(
                 f"Impossible to execute {func_name}, fails with error : {e}"
             )
             for t in traceback.extract_tb(e.__traceback__):
-                datahasher.logger.debug(
-                    f"Error in {t.name} at line {t.lineno}: \n\t{t.line}"
-                )
+                dema.logger.debug(f"Error in {t.name} at line {t.lineno}: \n\t{t.line}")
 
     return wrapper
 

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-import datahasher
+import dema
 
 
 def timeit(method: Callable) -> Callable:
@@ -13,7 +13,7 @@ def timeit(method: Callable) -> Callable:
         t0 = time.perf_counter()
         result = method(*args, **kwargs)
         t1 = time.perf_counter()
-        datahasher.logger.debug(f"{method.__name__} {(t1 - t0) * 1000:2.2f} ms")
+        dema.logger.debug(f"{method.__name__} {(t1 - t0) * 1000:2.2f} ms")
         return result
 
     return timed

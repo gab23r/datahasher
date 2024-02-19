@@ -2,17 +2,16 @@ import os
 from pathlib import Path
 from typing import Any
 
+import dema.back.utils_io as utils_io
 import polars as pl
-from polars import col as c
-from sqlmodel import Session
-
-import datahasher.back.utils_io as utils_io
-from datahasher.database import TABLES
-from datahasher.utils.utils_sql import (
+from dema.database import TABLES
+from dema.utils.utils_sql import (
     dict_to_sql_where_statement,
     get_db_table_schema,
     read_from_sqlite,
 )
+from polars import col as c
+from sqlmodel import Session
 
 
 class Engine:

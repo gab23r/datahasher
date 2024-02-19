@@ -34,7 +34,7 @@ ignore = [
   "B905", # `zip()` without an explicit `strict=` parameter
 ]
 exclude = [
-  "datahasher/tests",
+  "dema/tests",
 ]
 
 [tool.ruff.lint.pycodestyle]

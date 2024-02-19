@@ -6,11 +6,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import polars as pl
+from dema.database import LogicalDataHash
 from polars import col as c
 from polars.datatypes.convert import dtype_short_repr_to_dtype
 from sqlmodel import Session, SQLModel, col, create_engine, select
-
-from datahasher.database import LogicalDataHash
 
 if TYPE_CHECKING:
     from polars.type_aliases import SchemaDict

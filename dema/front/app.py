@@ -3,13 +3,12 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import dema
 import ipyvuetify as v
 import traitlets as t
-
-import datahasher
-from datahasher.engine import Engine
-from datahasher.front.logger import Logger, OutputWidgetHandler
-from datahasher.utils.utils_misc import import_class
+from dema.engine import Engine
+from dema.front.logger import Logger, OutputWidgetHandler
+from dema.utils.utils_misc import import_class
 
 
 class App(v.App, Logger):
@@ -26,7 +25,7 @@ class App(v.App, Logger):
         handler.setFormatter(
             logging.Formatter("%(asctime)s - [%(levelname)s] %(message)s", "%H:%M:%S")
         )
-        datahasher.logger.addHandler(handler)
+        dema.logger.addHandler(handler)
 
         self.logger_w = handler.text_area
         self.linear_progess = v.ProgressLinear(
@@ -154,7 +153,7 @@ class AppBar(v.AppBar, Logger):
         )
 
         version_chip = v.Chip(
-            children=[f"v.{datahasher.__version__}"], outlined=True, class_="ml-2"
+            children=[f"v.{dema.__version__}"], outlined=True, class_="ml-2"
         )
         env_chip = v.Chip(children=["dev"], outlined=True, class_="ml-2")
 
