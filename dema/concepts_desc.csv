@@ -1,0 +1,7 @@
+concept,column,data_type,type,null_forbidden,fk_concept
+concepts_desc,concept,str,primary,False,
+concepts_desc,column,str,primary,False,
+concepts_desc,data_type,str,,False,
+concepts_desc,type,str,,True,
+concepts_desc,null_forbidden,bool,,False,
+concepts_desc,fk_concept,str,,True,

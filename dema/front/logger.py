@@ -91,4 +91,4 @@ class OutputWidgetHandler(logging.Handler):
 
         self.logger_badge.v_model = True
 
-        print(formatted_record)
+        # formatted_record)

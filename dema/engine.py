@@ -1,64 +1,110 @@
+from functools import cached_property
 import os
 from pathlib import Path
-from typing import Any
+
+import polars as pl
+from polars import col as c
+import dema
+from dema.back.exception import NotInConceptDesc
 
 import dema.back.utils_io as utils_io
-import polars as pl
-from dema.database import TABLES
-from dema.utils.utils_sql import (
-    dict_to_sql_where_statement,
-    get_db_table_schema,
-    read_from_sqlite,
-)
-from polars import col as c
-from sqlmodel import Session
+from dema.back import utils_sql
+from dema.back.concept import Concept
+from dema.database import LogicalDataHash
 
 
-class Engine:
+class DataEngine:
     def __init__(
         self,
-        physical_data_path: Path | None = None,
-        logical_data_path: Path | None = None,
-        db_path: Path | None = None,
+        name: str,
+        env: str = "dev",
+        data_root_path: Path | None = None,
         concepts_desc_path: Path | None = None,
-        treeview_path: Path | None = None,
-        app_name: str = "Data Hasher",
+        front_structure_path: Path | None = None,
+        dev_mode=True,
     ) -> None:
-        self.app_name = app_name
-        self.physical_data_path = Path(
-            os.getenv(
-                "PHYSICAL_DATA_PATH", physical_data_path or Path().parent / "hashes"
-            )
-        )
-        self.logical_data_path = Path(
-            os.getenv("LOGICAL_DATA_PATH", logical_data_path or Path().parent / "data")
-        )
-        self.db_path = db_path or self.logical_data_path / "database.sql"
-        self.treeview_path = treeview_path
+        self.name = name
+        self.env = env
+        self.dev_mode = dev_mode
 
-        self.concepts_desc_path = (
-            concepts_desc_path or self.logical_data_path / "concepts_desc.csv"
+        self.data_root_path = (
+            (
+                Path(os.getenv("DEMA_DATA_ROOT_PATH", "~/.dema"))
+                if data_root_path is None
+                else data_root_path
+            )
+            .expanduser()
+            .absolute()
         )
-        self.concepts_desc = utils_io.read_descriptors(self.concepts_desc_path)
-        self.sqlEngine = utils_io.get_engine(self.db_path)
+
+        self.physical_data_path = self.data_root_path / self.name / "hashes"
+        self.logical_data_path = self.data_root_path / self.name / self.env / "data"
+        self.db_path = self.data_root_path / self.name / self.env / "database.db"
+
+        utils_io.make_dirs(self.physical_data_path, self.logical_data_path)
+
+        self.front_structure_path = front_structure_path
+        self.concepts_desc_path = concepts_desc_path or self.logical_data_path / "concepts_desc.csv"
+
+        # self.concepts_desc = utils_io.read_descriptors(self.concepts_desc_path)
+        self.sql_engine = utils_sql.get_sql_engine(self.db_path)
+
+        self.to_concept(self.concepts_desc, 'concepts_desc')
+
+    @cached_property
+    def engine_concepts_desc(self) -> pl.DataFrame:
+        return pl.read_csv(
+            f"{dema.__engine_root_path__}/concepts_desc.csv",
+            schema={
+                "concept": pl.String,
+                "column": pl.String,
+                "data_type": pl.String,
+                "type": pl.String,
+                "null_forbidden": pl.Boolean,
+                "fk_concept": pl.String,
+            },
+        )
+    
+    @property
+    def concepts_desc(self) -> pl.DataFrame:
+        if not hasattr(self, '_concepts_desc'):
+
+            if self.concepts_desc_path.exists():
+                self._concepts_desc = pl.read_csv(
+                    self.concepts_desc_path,
+                    schema=self.engine_concepts_desc.schema,
+                )
+            else: 
+                self._concepts_desc = pl.DataFrame(schema=self.engine_concepts_desc.schema)
+                
+        return self._concepts_desc
+    
+    @concepts_desc.setter
+    def concepts_desc(self, df: pl.DataFrame):
+        self._concepts_desc = df
+
+        dema.logger.debug(f'writing {self.concepts_desc_path}')
+        df.write_csv(self.concepts_desc_path)
+
 
     def read_concept(
         self,
         concept: str,
-        concept_ids: list[int] | None = None,
+        concept_id: int | None = None,
         version: int | None = 0,
-    ) -> pl.LazyFrame:
+    ) -> Concept:
         """Return a LazyFrame of the concept."""
         if version == 0:  # then we can use symlink
-            paths = self.get_physical_paths(concept, concept_ids)
+            path = utils_io.get_logical_path(self.logical_data_path, concept, concept_id)
+            paths = [path] if path.exists() else []
         else:
             paths = [
                 self.physical_data_path / f"{h}.parquet"
                 for h in self.query_logical_data_hash(
-                    columns=["HASH"],
+                    columns=["hash"],
                     version=version,
                     concept=concept,
-                    concept_id=concept_ids,
+                    concept_id=concept_id,
                 )
                 .to_series()
                 .to_list()
@@ -72,7 +118,15 @@ class Engine:
             case _:
                 df = pl.scan_parquet(paths)
 
-        return df
+        concept_obj = Concept(
+            df,
+            engine = self,
+            concept= concept,
+            concept_id=concept_id,
+            version=version
+        )
+        return concept_obj
+
 
     def query_logical_data_hash(
         self,
@@ -82,10 +136,10 @@ class Engine:
         version: int | None = 0,
     ) -> pl.DataFrame:
         """Return the rows of LogicalDataHash for this concept, concept_id, version"""
-        where = dict_to_sql_where_statement(
+        where = utils_io.dict_to_sql_where_statement(
             {
-                "CONCEPT": concept,
-                "CONCEPT_ID": concept_id,
+                "concept": concept,
+                "concept_id": concept_id,
             }
         )
 
@@ -94,27 +148,32 @@ class Engine:
                 f"select {', '.join(columns) if columns else '*'} from (",
                 "    select *,",
                 "    -RANK() OVER ("
-                "        PARTITION BY CONCEPT, CONCEPT_ID ORDER BY TIMESTAMP_NS desc"
-                "    ) + 1 AS VERSION",
+                "        PARTITION BY concept, concept_id ORDER BY timestamp_ns desc"
+                "    ) + 1 AS version",
                 "    FROM logical_data_hash",
                 f"    {where}",
                 ")",
-                dict_to_sql_where_statement({"VERSION": version}),
+                utils_io.dict_to_sql_where_statement({"version": version}),
             ]
         )
-        df = read_from_sqlite(
+        model_json_schema = LogicalDataHash.model_json_schema()
+        df = utils_io.read_from_sqlite(
             query,
-            self.sqlEngine,
-            schema_overrides=get_db_table_schema("logical_data_hash"),
-        ).filter(c.HASH.is_not_null())
+            self.sql_engine,
+            schema_overrides=utils_io.get_db_table_schema(model_json_schema),
+        ).filter(c.hash.is_not_null())
 
         return df
 
     def to_concept(
-        self, df: pl.LazyFrame | pl.DataFrame, concept: str, concept_id: int | None
+        self,
+        df: pl.LazyFrame | pl.DataFrame,
+        concept: str,
+        concept_id: int | None = None,
     ) -> None:
         """Save a concept in parquet if it complies with descriptor rules."""
 
+        dema.logger.debug(f"to_concept: {concept}, {concept_id}")
         concept_desc = self.get_concept_desc(concept)
 
         # make sure schema is correct
@@ -122,7 +181,7 @@ class Engine:
         df = df.lazy().select(schema.keys()).cast(schema).collect()  # type: ignore
 
         # check pk validity
-        if pk := utils_io.get_pk(concept_desc):
+        if pk := utils_io.get_pks(concept_desc):
             assert_msg = f"Primary keys ({pk}) are not unique for {concept}"
             assert df.select(pk).is_unique().all(), assert_msg
 
@@ -135,13 +194,15 @@ class Engine:
         self.append_to_logical_data_hash(
             pl.DataFrame(
                 {
-                    "CONCEPT": concept,
-                    "CONCEPT_ID": concept_id,
-                    "HASH": hash_,
+                    "concept": concept,
+                    "concept_id": concept_id,
+                    "hash": hash_,
                 }
             )
         )
-
+        if concept == 'concepts_desc':
+            self.concepts_desc = df
+            
     def delete_concept(
         self,
         concept: list[str] | str | None = None,
@@ -151,96 +212,25 @@ class Engine:
         data_hash = self.query_logical_data_hash(concept, concept_ids)
 
         self.append_to_logical_data_hash(
-            data_hash.with_columns(pl.lit(None, dtype=pl.Utf8).alias("HASH")),
+            data_hash.with_columns(pl.lit(None, dtype=pl.Utf8).alias("hash")),
         )
-
-    def query_db(self, table_name: str, **filters: Any) -> pl.DataFrame:
-        where = dict_to_sql_where_statement(filters)
-
-        table = TABLES["table_name"]
-        df = pl.read_database(
-            f"select * from {table_name} {where}",
-            self.sqlEngine,
-            schema_overrides=get_db_table_schema(table),
-        )
-        return df
 
     def get_concept_desc(self, concept: str) -> pl.DataFrame:
-        concept_desc = self.concepts_desc.filter(concept == c.CONCEPT)
-        assert not concept_desc.is_empty(), f"{concept} is not a concept"
-
+        concept_desc = self.concepts_desc.filter(c.concept == concept)
+        if concept_desc.is_empty():
+            concept_desc = self.engine_concepts_desc.filter(c.concept == concept)
+            if concept_desc.is_empty():
+                raise NotInConceptDesc(f"{concept} is not a concept.")
         return concept_desc
-
+    
     def append_to_logical_data_hash(self, data_hash: pl.DataFrame) -> None:
-        data_hash = data_hash.drop(
-            "ID", "TIMESTAMP_NS"
-        )  # these need to be recompute by sqlmodel
-
-        self.append_to_db(data_hash, table_name="logical_data_hash")
-        self.update_logical_paths(data_hash)
-
-    def append_to_db(self, df: pl.DataFrame, table_name: str) -> None:
-        with Session(self.sqlEngine) as session:
-            session.add_all([TABLES[table_name](**d) for d in df.iter_rows(named=True)])
-            session.commit()
-
-    def get_physical_paths(
-        self,
-        concept: str,
-        concept_ids: list[int] | None = None,
-    ) -> list[Path]:
-        """
-        Return list a path for the given concept
-        If symlinks do not exists, we create them if we are in the default env
-        """
-        data_hash_to_logical_path = self.get_data_hash_to_logical_path()
-        logical_paths: list[Path] = [
-            Path(p)
-            for p in pl.DataFrame(
-                {
-                    "CONCEPT": concept,
-                    "CONCEPT_ID": "*" if concept_ids is None else concept_ids,
-                }
-            )
-            .select(data_hash_to_logical_path)
-            .to_series()
-            .to_list()
-        ]
-
-        paths = utils_io.filter_non_existing_path(logical_paths)
-
-        return paths
-
-    def get_data_hash_to_logical_path(self) -> pl.Expr:
-        return pl.concat_str(
-            pl.lit(str(self.logical_data_path)) + "/",
-            c.CONCEPT + "/",
-            c.CONCEPT_ID.fill_null("*"),
-            pl.lit(".parquet"),
-        ).alias("LOGICAL_PATH")
-
-    def update_logical_paths(
-        self,
-        logical_data_hash: pl.DataFrame,
-    ) -> None:
-        symlinks_should_be = logical_data_hash.select(
-            "HASH", self.get_data_hash_to_logical_path()
+        # remove computed by sqlmodel
+        data_hash = data_hash.drop("id", "timestamp_ns")
+        rows = utils_sql.add_rows(
+            self.sql_engine,
+            LogicalDataHash,
+            data_hash.rows(named=True),
         )
-
-        for hash_, logical_path in symlinks_should_be.iter_rows():
-            path = Path(logical_path)
-            # new is inexistent => remove
-            if hash_ is None:
-                if path.exists():
-                    path.unlink()
-                continue
-
-            # new is the same => do nothing
-            if hash_ == path.resolve().stem:
-                continue
-
-            # else update
-            if path.exists():
-                path.unlink()
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.symlink_to(self.physical_data_path / f"{hash_}.parquet")
+        utils_io.update_logical_paths(
+            self.logical_data_path, self.physical_data_path, rows
+        )

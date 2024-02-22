@@ -6,16 +6,17 @@ from typing import Any
 import dema
 import ipyvuetify as v
 import traitlets as t
-from dema.engine import Engine
+from dema.engine import DataEngine
 from dema.front.logger import Logger, OutputWidgetHandler
 from dema.utils.utils_misc import import_class
 
 
 class App(v.App, Logger):
-    def __init__(self, *, engine: Engine, app: bool | None = True):
+    def __init__(self, *, engine: DataEngine, app: bool | None = True):
         self.app = app
+        self.engine = engine
         self.app_bar = AppBar(engine=engine, app=app)
-        self.tree_view = TreeView(engine.treeview_path)
+        self.tree_view = TreeView(engine.front_structure_path)
         self.navigation_drawer = v.NavigationDrawer(
             app=app, v_model=True, clipped=True, children=[self.tree_view]
         )
@@ -77,9 +78,9 @@ class App(v.App, Logger):
                 class_path = new[0]["class"]
                 args = new[0].get("args", [])
                 kwargs = new[0].get("kwargs", {})
-                class_instance = import_class(class_path)(*args, **kwargs)
+                class_instance = import_class(class_path)(self.engine, *args, **kwargs)
                 self.content.children = [
-                    class_instance.w if hasattr(class_instance, "w") else class_instance
+                    class_instance.ui if hasattr(class_instance, "ui") else class_instance
                 ]
         else:
             self.content.children = []
@@ -114,7 +115,8 @@ class App(v.App, Logger):
 
 
 class AppBar(v.AppBar, Logger):
-    def __init__(self, *, engine: Engine, app: bool | None = False):
+    def __init__(self, *, engine: DataEngine, app: bool | None = False):
+        self.engine = engine
         self.nav_icon = v.AppBarNavIcon()
         self.logger_icon = v.Icon(children=["mdi-book-open-outline"])
         self.logger_badge = v.Badge(
@@ -133,7 +135,7 @@ class AppBar(v.AppBar, Logger):
         self.search = v.Combobox(
             v_model=None,
             item_value="class",
-            label=f"Explore {engine.app_name} ...",
+            label=f"Explore {engine.name} ...",
             rounded=True,
             clearable=True,
             single_line=True,
@@ -155,7 +157,7 @@ class AppBar(v.AppBar, Logger):
         version_chip = v.Chip(
             children=[f"v.{dema.__version__}"], outlined=True, class_="ml-2"
         )
-        env_chip = v.Chip(children=["dev"], outlined=True, class_="ml-2")
+        env_chip = v.Chip(children=[self.engine.env], outlined=True, class_="ml-2")
 
         super().__init__(
             app=app,
@@ -165,7 +167,7 @@ class AppBar(v.AppBar, Logger):
             color="primary",
             children=[
                 self.nav_icon,
-                v.ToolbarTitle(children=[engine.app_name]),
+                v.ToolbarTitle(children=[engine.name]),
                 v.Spacer(),
                 self.search,
                 v.Col(
