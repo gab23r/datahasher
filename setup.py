@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="dema",
-    version="0.2.0",
+    version="0.2.1",
     author="Gabriel Robin",
     description="Data Engine MAnagment tool for python",
     long_description=long_description,
@@ -21,5 +21,6 @@ setuptools.setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    package_data={"": ["front/style.css"]},
     python_requires=">=3.11",
 )

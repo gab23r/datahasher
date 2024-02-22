@@ -1,12 +1,10 @@
 from typing import Any
-import dema
 
 import dema.back.utils_io as utils_io
 import polars as pl
 from dema.back.utils_view import get_concept_columns_repr
 from dema.engine import DataEngine
 from dema.front.manager.base import EditingTableManager, TableManager
-from polars import col as c
 from polars.type_aliases import IntoExpr
 
 
