@@ -2,9 +2,11 @@ import json
 import logging
 from pathlib import Path
 from typing import Any, Self
+from ipywidgets import jsdlink
 
 import dema
 import ipyvuetify as v
+import traitlets as t
 from dema.engine import DataEngine
 from dema.front.logger import Logger, OutputWidgetHandler
 from dema.utils.utils_misc import import_class
@@ -47,7 +49,7 @@ class App(v.App, Logger):
         self.logger_w.observe(self.on_change_text_area, names="v_model")
         self.app_bar.logger_icon.on_event("click", self.toggle_logger)
         self.app_bar.nav_icon.on_event("click", self.toggle_navigation_drawer)
-        self.tree_view.observe(self.on_click_treeview, names="active")
+        self.tree_view.observe(self.on_click_treeview, names="activated")
         self.logger_w.on_event("click:clear", self._on_click_clear_text_area)
 
     def _on_click_clear_text_area(self, *args) -> None:
@@ -185,7 +187,11 @@ class AppBar(v.AppBar, Logger):
 
 
 class TreeView(v.Treeview, Logger):
-
+    # active is a trait from v.Treeview, event from the front are handled with `update:active`
+    # but self.active is not sync on the back (BUG ??)
+    # The workaound is to create another trait: `activated` that is jsdlink with `active`
+    activated = t.List(t.Any(), default_value=None, allow_none=True).tag(sync=True)
+    
     def __init__(self, treeview_path: Path | None):
         if treeview_path and treeview_path.exists():
             items = json.loads(treeview_path.read_text())
@@ -208,6 +214,7 @@ class TreeView(v.Treeview, Logger):
         ) -> None:
             # there is a bug `active is not properly sync`
             widget.__dict__["_trait_values"]["active"] = data
-    
+            widget.activated = data if data else []
 
+        jsdlink((self, "active"), (self, "activated"))
         self.on_event("update:active", _on_update_active)
