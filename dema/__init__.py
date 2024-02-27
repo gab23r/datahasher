@@ -3,7 +3,7 @@ from pathlib import Path
 from dema.engine import DataEngine
 
 __engine_root_path__ = Path(__file__).parent
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 # set the logger
 logger = _logging.getLogger("dema")
