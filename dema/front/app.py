@@ -1,11 +1,10 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 import dema
 import ipyvuetify as v
-import traitlets as t
 from dema.engine import DataEngine
 from dema.front.logger import Logger, OutputWidgetHandler
 from dema.utils.utils_misc import import_class
@@ -186,7 +185,6 @@ class AppBar(v.AppBar, Logger):
 
 
 class TreeView(v.Treeview, Logger):
-    last_open = t.Dict({}, allow_none=True).tag(sync=True)
 
     def __init__(self, treeview_path: Path | None):
         if treeview_path and treeview_path.exists():
@@ -205,9 +203,11 @@ class TreeView(v.Treeview, Logger):
             return_object=True,
         )
 
-        def update_active(
-            widget: v.Treeview, event: str, data: list[Any | None]
+        def _on_update_active(
+            widget: Self, event: str, data: list[Any | None]
         ) -> None:
-            widget.active = data if data else [None]
+            # there is a bug `active is not properly sync`
+            widget.__dict__["_trait_values"]["active"] = data
+    
 
-        self.on_event("update:active", update_active)
+        self.on_event("update:active", _on_update_active)
