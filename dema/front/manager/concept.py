@@ -40,7 +40,7 @@ class EditingConceptManager(EditingTableManager):
 
 
     def get_df(self) -> pl.LazyFrame:
-        return self.engine.read_concept(self.concept, self.concept_id)._ldf
+        return self.engine.read_concept(self.concept, self.concept_id)
 
     def get_default_new_item(self) -> dict[str, IntoExpr]:
         default_new_item = {}
@@ -48,7 +48,7 @@ class EditingConceptManager(EditingTableManager):
         # if pk is int, we increment it by one-
         if self.auto_increment_key:
             default_new_item[self.item_key] = (
-                self.df.select(pl.col(self.item_key).max().fill_null(0) + 1).collect().item()
+                self.df.select(pl.col(self.item_key).fill_null(pl.col(self.item_key).max().fill_null(0) + 1)).collect().item()
             )
 
         return default_new_item
@@ -62,7 +62,7 @@ class ConceptManager(TableManager):
     def __init__(self, engine: DataEngine, concept: str, concept_id: int | None, **kwargs: Any):
         self.engine = engine
         self.concept = concept
-        df = self.engine.read_concept(concept)._ldf
+        df = self.engine.read_concept(concept)
         columns_repr = get_concept_columns_repr(engine, concept)
 
         # default kwargs

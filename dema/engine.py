@@ -9,7 +9,6 @@ from dema.back.exception import NotInConceptDesc
 
 import dema.back.utils_io as utils_io
 from dema.back import utils_sql
-from dema.back.concept import Concept
 from dema.database import LogicalDataHash
 
 
@@ -92,7 +91,7 @@ class DataEngine:
         concept: str,
         concept_id: int | None = None,
         version: int | None = 0,
-    ) -> Concept:
+    ) -> pl.LazyFrame:
         """Return a LazyFrame of the concept."""
         if version == 0:  # then we can use symlink
             path = utils_io.get_logical_path(self.logical_data_path, concept, concept_id)
@@ -118,14 +117,7 @@ class DataEngine:
             case _:
                 df = pl.scan_parquet(paths)
 
-        concept_obj = Concept(
-            df,
-            engine = self,
-            concept= concept,
-            concept_id=concept_id,
-            version=version
-        )
-        return concept_obj
+        return df
 
 
     def query_logical_data_hash(
