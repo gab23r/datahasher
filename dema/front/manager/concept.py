@@ -48,7 +48,7 @@ class EditingConceptManager(EditingTableManager):
         # if pk is int, we increment it by one-
         if self.auto_increment_key:
             default_new_item[self.item_key] = (
-                self.df.select(pl.col(self.item_key).fill_null(pl.col(self.item_key).max().fill_null(0) + 1)).collect().item()
+                self.df.select(pl.col(self.item_key).max().fill_null(0) + 1).collect().item()
             )
 
         return default_new_item
