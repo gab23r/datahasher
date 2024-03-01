@@ -86,7 +86,7 @@ def update_logical_paths(
             continue
     
         # else update
-        if logical_path.exists():
+        if logical_path.is_symlink() or logical_path.exists():
             logical_path.unlink()
         dema.logger.debug(f"update symlinks {logical_path}")
         logical_path.parent.mkdir(parents=True, exist_ok=True)

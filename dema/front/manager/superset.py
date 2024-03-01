@@ -39,14 +39,13 @@ class SupersetManager(EditingConceptManager):
 
         # update all ids
         if id_to_updates:
-            df_dict = self._load_dataframes_from_file_inputs()
+            if df_dict := self._load_dataframes_from_file_inputs():
+                # let the opportunity to a children classe to overwrite
+                df_dict_preprocessed = self.preprocess_inputs(**df_dict)
 
-            # let the opportunity to a children classe to overwrite
-            df_dict_preprocessed = self.preprocess_inputs(**df_dict)
-
-            for concept_id in id_to_updates:
-                for concept, df in df_dict_preprocessed.items():
-                    self.engine.to_concept(df, concept, concept_id)
+                for concept_id in id_to_updates:
+                    for concept, df in df_dict_preprocessed.items():
+                        self.engine.to_concept(df, concept, concept_id)
 
     def preprocess_inputs(self, **df_dict: pl.DataFrame) -> dict[str, pl.DataFrame]:
         raise NotImplementedError(
